@@ -1,10 +1,10 @@
--- Game Restriction: Only works on Steal a Brainrot
+-- Restriction: Only works in the game "Steal a Brainrot"
 if game.PlaceId ~= 109983668079237 then
-    game:GetService("Players").LocalPlayer:Kick("Please join Steal a Brainrot")
+    game:GetService("Players").LocalPlayer:Kick("Please join the game Steal a Brainrot")
     return
 end
 
--- Anti-Kick and Crash Protection
+-- Anti-Kick and Anti-Crash System
 pcall(function()
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
@@ -18,6 +18,7 @@ pcall(function()
     local oldNamecall = mt.__namecall
     local oldIndex = mt.__index
     
+    -- Prevents kick attempts via metatable
     mt.__namecall = newcclosure(function(self, ...)
         if gameShuttingDown then return oldNamecall(self, ...) end
         local method = getnamecallmethod()
@@ -28,6 +29,7 @@ pcall(function()
         return oldNamecall(self, ...)
     end)
     
+    -- Blocks destructive methods like kick, breakjoints, destroy
     mt.__index = newcclosure(function(self, key)
         if gameShuttingDown then return oldIndex(self, key) end
         if typeof(key) == "string" then
@@ -43,6 +45,7 @@ pcall(function()
         return oldIndex(self, key)
     end)
     
+    -- Overrides player kick method
     if LocalPlayer then
         local originalKick = LocalPlayer.Kick
         LocalPlayer.Kick = function(self, ...)
@@ -54,15 +57,17 @@ pcall(function()
         end
     end
     
+    -- Character protection system
     local function protectCharacter(char)
         if not char then return end
         
+        -- Prevents part destruction
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
                 local originalDestroy = part.Destroy
                 part.Destroy = function(self, ...)
                     if not gameShuttingDown then
-                        warn("Attempted to destroy character part: " .. part.Name)
+                        warn("Attempt to destroy character part: " .. part.Name)
                         return nil
                     end
                     return originalDestroy(self, ...)
@@ -70,12 +75,14 @@ pcall(function()
             end
         end
         
+        -- Prevents ragdoll on death
         local hum = char:FindFirstChildWhichIsA("Humanoid")
         if hum then
             hum.BreakJointsOnDeath = false
         end
     end
     
+    -- Applies protection to current and future characters
     if LocalPlayer.Character then
         protectCharacter(LocalPlayer.Character)
     end
@@ -85,7 +92,7 @@ pcall(function()
     if setreadonly then setreadonly(mt, true) end
 end)
 
--- Load RedzLib
+-- Loads RedzLib UI library
 local success, redzlib = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao143/Library-ui/refs/heads/main/Redzhubui"))()
 end)
@@ -95,36 +102,46 @@ if not success then
     return
 end
 
--- Create Window
+-- Creates main window
 local Window = redzlib:MakeWindow({
     Title = "Zeta Hub X Steal a Brainrot",
     SubTitle = "by SILENT",
     SaveFolder = "ZetaHubUniversal"
 })
 
+-- Adds minimize button
 Window:AddMinimizeButton({
     Button = { Image = "rbxassetid://100006760882280", BackgroundTransparency = 0 },
     Corner = { CornerRadius = UDim.new(0, 6) },
 })
 
--- Services
+-- Game services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 
--- Player and References
+-- Player references
 local LocalPlayer = Players.LocalPlayer
 local character, humanoid
 local markedLocation = nil
 local baseBlockLocation = nil
 
+-- Brainrot detection system
+local brainrotNotificationEnabled = false
+local brainrotConnection
+local knownBrainrots = {}
+
+-- Updates character references
 local function updateReferences()
     character = LocalPlayer.Character
     humanoid = character and character:FindFirstChildOfClass("Humanoid") or nil
 end
 
+-- Sets up character tracking
 LocalPlayer.CharacterAdded:Connect(updateReferences)
 LocalPlayer.CharacterRemoving:Connect(function()
     character = nil
@@ -133,12 +150,23 @@ end)
 
 updateReferences()
 
+-- Notification system
+local function sendNotification(title, text, duration)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration or 5
+        })
+    end)
+end
+
 -- Discord Tab
 local TabDiscord = Window:MakeTab({ Title = "Discord", Icon = "rbxassetid://84198990394879" })
 TabDiscord:AddSection("Discord")
 TabDiscord:AddDiscordInvite({
     Name = "Zeta Hub",
-    Description = "Join the community",
+    Description = "Join our community",
     Logo = "rbxassetid://88800066762467",
     Invite = "https://discord.gg/pzrtAEDBbt"
 })
@@ -147,9 +175,10 @@ TabDiscord:AddDiscordInvite({
 local TabSecurity = Window:MakeTab({ Title = "Security", Icon = "rbxassetid://139126357881607" })
 TabSecurity:AddSection("Base Tools")
 
+-- Marks base block location
 TabSecurity:AddButton({
     Title = "Mark Base Block Location",
-    Description = "Save your current position as a base block reference",
+    Description = "Saves your current position as reference",
     Callback = function()
         updateReferences()
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -162,9 +191,10 @@ TabSecurity:AddButton({
     end
 })
 
+-- Teleports to saved base block
 TabSecurity:AddButton({
     Title = "Teleport to Base Block",
-    Description = "Teleport to the saved base block location",
+    Description = "Teleports to the saved base block location",
     Callback = function()
         updateReferences()
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -172,14 +202,15 @@ TabSecurity:AddButton({
             hrp.CFrame = CFrame.new(baseBlockLocation)
             print("Teleported to base block")
         else
-            warn("Missing HumanoidRootPart or no location marked")
+            warn("HumanoidRootPart missing or location not marked")
         end
     end
 })
 
+-- Teleports to current base
 TabSecurity:AddButton({
-    Title = "Teleport to Your Side Base",
-    Description = "Teleport to the PlotBlock of the current base you're inside",
+    Title = "Teleport to Your Base",
+    Description = "Teleports to the current base's PlotBlock",
     Callback = function()
         updateReferences()
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -209,10 +240,104 @@ TabSecurity:AddButton({
     end
 })
 
+-- Sub Farming Tab
+local TabSubFarming = Window:MakeTab({ Title = "Sub Farming", Icon = "rbxassetid://103306413269388" })
+TabSubFarming:AddSection("Brainrot Detection")
+
+-- Brainrot detection system
+local function checkForBrainrots()
+    if not brainrotNotificationEnabled then return end
+    
+    -- Looks for Brainrot items in workspace
+    for _, item in pairs(workspace:GetDescendants()) do
+        if item:IsA("Model") or item:IsA("Part") then
+            local itemName = item.Name:lower()
+            -- Common Brainrot terms
+            if itemName:find("brainrot") or itemName:find("skibidi") or itemName:find("sigma") or 
+               itemName:find("rizz") or itemName:find("ohio") or itemName:find("gyatt") or
+               itemName:find("fanum") or itemName:find("tax") then
+                
+                local itemId = tostring(item)
+                if not knownBrainrots[itemId] then
+                    knownBrainrots[itemId] = true
+                    sendNotification("🧠 Brainrot Detected!", "New brainrot found: " .. item.Name, 10)
+                    warn("Brainrot detected:", item.Name, "at", item:GetPivot().Position)
+                end
+            end
+        end
+    end
+    
+    -- Checks ReplicatedStorage for shop items
+    pcall(function()
+        for _, item in pairs(ReplicatedStorage:GetDescendants()) do
+            if item:IsA("Model") or item:IsA("StringValue") or item:IsA("Part") then
+                local itemName = item.Name:lower()
+                if itemName:find("brainrot") or itemName:find("skibidi") or itemName:find("sigma") or 
+                   itemName:find("rizz") or itemName:find("ohio") or itemName:find("gyatt") or
+                   itemName:find("fanum") or itemName:find("tax") then
+                    
+                    local itemId = tostring(item)
+                    if not knownBrainrots[itemId] then
+                        knownBrainrots[itemId] = true
+                        sendNotification("🧠 Brainrot Available!", "Shop item: " .. item.Name, 10)
+                        warn("Brainrot available in shop:", item.Name)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Brainrot notification toggle
+TabSubFarming:AddToggle({
+    Title = "Brainrot Notifications",
+    Description = "Get alerts when brainrots appear for purchase",
+    Default = false,
+    Callback = function(state)
+        brainrotNotificationEnabled = state
+        if state then
+            warn("Brainrot notifications enabled")
+            sendNotification("🧠 Brainrot Detector", "Monitoring for brainrots!", 3)
+            brainrotConnection = RunService.Heartbeat:Connect(checkForBrainrots)
+        else
+            warn("Brainrot notifications disabled")
+            if brainrotConnection then
+                brainrotConnection:Disconnect()
+                brainrotConnection = nil
+            end
+            knownBrainrots = {} -- Resets cache
+        end
+    end
+})
+
+-- Clears Brainrot cache
+TabSubFarming:AddButton({
+    Title = "Clear Brainrot Cache",
+    Description = "Resets the list of detected brainrots",
+    Callback = function()
+        knownBrainrots = {}
+        sendNotification("🧠 Cache Cleared", "Detection cache reset", 3)
+        warn("Brainrot cache cleared")
+    end
+})
+
+TabSubFarming:AddSection("Automatic Features")
+
+-- Manual Brainrot scan
+TabSubFarming:AddButton({
+    Title = "Scan for Brainrots Now",
+    Description = "Manually scans for available brainrots",
+    Callback = function()
+        checkForBrainrots()
+        sendNotification("🧠 Scan Complete", "Manual scan completed", 3)
+    end
+})
+
 -- Main Tab
 local TabMain = Window:MakeTab({ Title = "Main", Icon = "rbxassetid://106319096400681" })
 TabMain:AddSection("Movement")
 
+-- Marks location for teleport
 TabMain:AddButton({
     Title = "Mark Location",
     Description = "Saves your current position for teleport",
@@ -221,16 +346,17 @@ TabMain:AddButton({
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
         if hrp then
             markedLocation = hrp.Position
-            print("Marked location at:", markedLocation)
+            print("Location marked at:", markedLocation)
         else
             warn("HumanoidRootPart not found")
         end
     end
 })
 
+-- Smooth teleport with damage immunity
 TabMain:AddButton({
-    Title = "Tween Teleport to Marked Location",
-    Description = "Smooth teleport with wall pass and damage immunity",
+    Title = "Smooth Teleport to Marked Location",
+    Description = "Teleport with wall clipping and damage immunity",
     Callback = function()
         updateReferences()
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -240,12 +366,14 @@ TabMain:AddButton({
         local originalHealth = humanoid.Health
         local immune = true
         
+        -- Health protection during teleport
         local healthConn = humanoid:GetPropertyChangedSignal("Health"):Connect(function()
             if immune and humanoid.Health < originalHealth then
                 humanoid.Health = originalHealth
             end
         end)
         
+        -- Makes character parts transparent
         local affectedParts = {}
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
@@ -257,6 +385,7 @@ TabMain:AddButton({
             end
         end
         
+        -- Removes wall collision
         local removedWalls = {}
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("BasePart") and obj.Name:lower():find("wall") then
@@ -266,6 +395,7 @@ TabMain:AddButton({
             end
         end
         
+        -- Creates and executes teleport animation
         local dist = (hrp.Position - markedLocation).Magnitude
         local tweenInfo = TweenInfo.new(dist / 40, Enum.EasingStyle.Linear)
         local tween = TweenService:Create(hrp, tweenInfo, { CFrame = CFrame.new(markedLocation + Vector3.new(0, 3, 0)) })
@@ -275,6 +405,7 @@ TabMain:AddButton({
             immune = false
             if healthConn then healthConn:Disconnect() end
             
+            -- Restores character parts
             for _, data in ipairs(affectedParts) do
                 if data.part and data.part.Parent then
                     data.part.Transparency = data.t
@@ -282,6 +413,7 @@ TabMain:AddButton({
                 end
             end
             
+            -- Restores walls
             for _, data in ipairs(removedWalls) do
                 if data.part and data.part.Parent then
                     data.part.Transparency = data.t
@@ -292,14 +424,151 @@ TabMain:AddButton({
     end
 })
 
--- Anti-Ragdoll
+TabMain:AddSection("Sky Teleport")
+
+-- Sky Teleport Interface
+local skyTeleportFrame = nil
+local skyButton = nil
+local skyButtonRGBConnection = nil
+
+TabMain:AddButton({
+    Title = "Sky Panel",
+    Description = "Toggles the sky teleport interface",
+    Callback = function()
+        if skyTeleportFrame then
+            skyTeleportFrame.Visible = not skyTeleportFrame.Visible
+        else
+            -- Creates sky teleport panel
+            skyTeleportFrame = Instance.new("Frame")
+            skyTeleportFrame.Name = "SkyTeleportFrame"
+            skyTeleportFrame.Size = UDim2.new(0, 150, 0, 60)
+            skyTeleportFrame.Position = UDim2.new(0.5, -75, 0.5, -30)
+            skyTeleportFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+            skyTeleportFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            skyTeleportFrame.BackgroundTransparency = 0.7
+            skyTeleportFrame.BorderSizePixel = 0
+            skyTeleportFrame.Visible = true
+            skyTeleportFrame.Active = true
+            skyTeleportFrame.Selectable = true
+            skyTeleportFrame.ZIndex = 10
+            skyTeleportFrame.Parent = game:GetService("CoreGui"):FindFirstChild("RobloxGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+            
+            -- Rounded corners
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 8)
+            corner.Parent = skyTeleportFrame
+            
+            -- Creates teleport button
+            skyButton = Instance.new("TextButton")
+            skyButton.Name = "SkyButton"
+            skyButton.Size = UDim2.new(0.9, 0, 0.8, 0)
+            skyButton.Position = UDim2.new(0.05, 0, 0.1, 0)
+            skyButton.BackgroundTransparency = 1
+            skyButton.Text = "UP"
+            skyButton.TextSize = 18
+            skyButton.Font = Enum.Font.GothamBold
+            skyButton.TextColor3 = Color3.new(1, 1, 1)
+            skyButton.TextStrokeTransparency = 0.5
+            skyButton.TextStrokeColor3 = Color3.new(0, 0, 0)
+            skyButton.ZIndex = 11
+            skyButton.Parent = skyTeleportFrame
+            
+            -- Makes panel draggable
+            local dragging
+            local dragInput
+            local dragStart
+            local startPos
+            
+            local function updateInput(input)
+                local delta = input.Position - dragStart
+                local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                skyTeleportFrame.Position = newPos
+            end
+            
+            skyTeleportFrame.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dragging = true
+                    dragStart = input.Position
+                    startPos = skyTeleportFrame.Position
+                    
+                    input.Changed:Connect(function()
+                        if input.UserInputState == Enum.UserInputState.End then
+                            dragging = false
+                        end
+                    end)
+                end
+            end)
+            
+            skyTeleportFrame.InputChanged:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseMovement then
+                    dragInput = input
+                end
+            end)
+            
+            UserInputService.InputChanged:Connect(function(input)
+                if input == dragInput and dragging then
+                    updateInput(input)
+                end
+            end)
+            
+            -- Teleport functionality
+            skyButton.MouseButton1Click:Connect(function()
+                updateReferences()
+                local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if skyButton.Text == "UP" then
+                        hrp.CFrame = CFrame.new(hrp.Position.X, 171, hrp.Position.Z)
+                        skyButton.Text = "DOWN"
+                    else
+                        hrp.CFrame = CFrame.new(hrp.Position.X, -7, hrp.Position.Z)
+                        skyButton.Text = "UP"
+                    end
+                end
+            end)
+            
+            -- RGB text effect
+            if skyButtonRGBConnection then
+                skyButtonRGBConnection:Disconnect()
+            end
+            
+            skyButtonRGBConnection = RunService.RenderStepped:Connect(function()
+                local hue = tick() % 5 / 5
+                local color = Color3.fromHSV(hue, 1, 1)
+                skyButton.TextColor3 = color
+            end)
+            
+            -- Close button
+            local closeButton = Instance.new("TextButton")
+            closeButton.Name = "CloseButton"
+            closeButton.Size = UDim2.new(0, 20, 0, 20)
+            closeButton.Position = UDim2.new(1, -25, 0, 5)
+            closeButton.Text = "X"
+            closeButton.TextColor3 = Color3.new(1, 1, 1)
+            closeButton.TextSize = 14
+            closeButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+            closeButton.BackgroundTransparency = 0.7
+            closeButton.ZIndex = 11
+            closeButton.Parent = skyTeleportFrame
+            
+            local closeCorner = Instance.new("UICorner")
+            closeCorner.CornerRadius = UDim.new(0, 10)
+            closeCorner.Parent = closeButton
+            
+            closeButton.MouseButton1Click:Connect(function()
+                skyTeleportFrame.Visible = false
+            end)
+        end
+    end
+})
+
+-- Anti-Ragdoll System
 local antiRagdollEnabled = false
 local antiRagdollConnection
 
 TabMain:AddSection("Anti-Ragdoll")
 TabMain:AddToggle({
     Title = "Anti-Ragdoll",
-    Description = "Prevents your character from turning into ragdoll",
+    Description = "Prevents your character from becoming a ragdoll",
     Default = false,
     Callback = function(state)
         antiRagdollEnabled = state
@@ -309,6 +578,7 @@ TabMain:AddToggle({
                 updateReferences()
                 if not character then return end
                 
+                -- Removes limb constraints
                 for _, limb in ipairs({"Left Arm", "Right Arm", "Left Leg", "Right Leg", "Head", "Torso", "UpperTorso", "LowerTorso"}) do
                     local part = character:FindFirstChild(limb)
                     if part then
@@ -320,6 +590,7 @@ TabMain:AddToggle({
                     end
                 end
                 
+                -- Keeps joints enabled
                 for _, joint in ipairs(character:GetDescendants()) do
                     if joint:IsA("Motor6D") then
                         joint.Enabled = true
@@ -339,7 +610,7 @@ TabMain:AddToggle({
 -- Functions Tab
 local TabFunctions = Window:MakeTab({ Title = "Functions", Icon = "rbxassetid://103306413269388" })
 
--- Infinite Jump
+-- Infinite Jump System
 local infiniteJumpEnabled = false
 local jumpConnection
 
@@ -352,7 +623,7 @@ end
 
 TabFunctions:AddToggle({
     Title = "Infinite Jump",
-    Description = "Allows you to jump infinitely in mid-air",
+    Description = "Allows jumping infinitely in mid-air",
     Default = false,
     Callback = function(state)
         infiniteJumpEnabled = state
@@ -361,6 +632,7 @@ TabFunctions:AddToggle({
             if jumpConnection then jumpConnection:Disconnect() end
             jumpConnection = UserInputService.JumpRequest:Connect(handleJump)
             
+            -- Reconnects after respawn
             LocalPlayer.CharacterAdded:Connect(function()
                 updateReferences()
                 if infiniteJumpEnabled then
@@ -378,7 +650,7 @@ TabFunctions:AddToggle({
     end
 })
 
--- NoClip
+-- NoClip System
 local noClipEnabled = false
 local noClipConnection
 
@@ -394,7 +666,7 @@ end
 
 TabFunctions:AddToggle({
     Title = "NoClip",
-    Description = "Allows you to walk through walls",
+    Description = "Allows passing through walls",
     Default = false,
     Callback = function(state)
         noClipEnabled = state
@@ -411,7 +683,7 @@ TabFunctions:AddToggle({
     end
 })
 
--- ESP Players (Persistent across deaths)
+-- ESP System (Player Highlighting)
 local espEnabled = false
 local espFolders = {}
 local espConnections = {}
@@ -422,7 +694,7 @@ local function createESP(player)
     local function setup()
         if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
         
-        -- Remove existing ESP
+        -- Cleans existing ESP
         if espFolders[player] then
             espFolders[player]:Destroy()
         end
@@ -433,17 +705,20 @@ local function createESP(player)
             espConnections[player] = {}
         end
         
+        -- Creates ESP folder
         local folder = Instance.new("Folder")
         folder.Name = "ESP" .. player.Name
         folder.Parent = workspace
         espFolders[player] = folder
         
+        -- Creates highlight effect
         local highlight = Instance.new("Highlight")
         highlight.Adornee = player.Character
         highlight.FillTransparency = 0.7
         highlight.OutlineTransparency = 0
         highlight.Parent = folder
         
+        -- Creates name tag
         local billboard = Instance.new("BillboardGui")
         billboard.Adornee = player.Character:FindFirstChild("HumanoidRootPart")
         billboard.Size = UDim2.new(0, 200, 0, 40)
@@ -463,6 +738,7 @@ local function createESP(player)
         textLabel.TextColor3 = Color3.new(1, 1, 1)
         textLabel.Parent = billboard
         
+        -- Adds health display
         local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
         if humanoid then
             local function updateText()
@@ -476,6 +752,7 @@ local function createESP(player)
             espConnections[player].healthConn = humanoid:GetPropertyChangedSignal("Health"):Connect(updateText)
         end
         
+        -- Adds RGB effect
         if not espConnections[player] then
             espConnections[player] = {}
         end
@@ -490,7 +767,7 @@ local function createESP(player)
     
     setup()
     
-    -- Ensure ESP persists across character respawns
+    -- Persists through respawns
     if not espConnections[player] then
         espConnections[player] = {}
     end
@@ -502,6 +779,7 @@ local function createESP(player)
     end)
 end
 
+-- Updates all ESP elements
 local function updateESP()
     for player, folder in pairs(espFolders) do
         if folder then folder:Destroy() end
@@ -523,12 +801,12 @@ local function updateESP()
     end
 end
 
--- ESP stays active after local player death
+-- ESP remains active after player death
 local espPlayerAddedConnection
 local espLocalPlayerRespawnConnection
 
 TabFunctions:AddToggle({
-    Title = "ESP Players",
+    Title = "Player ESP",
     Description = "Highlights players with RGB + name and health (Persistent)",
     Default = false,
     Callback = function(state)
@@ -537,7 +815,7 @@ TabFunctions:AddToggle({
             warn("ESP enabled")
             updateESP()
             
-            -- Handle new players joining
+            -- Handles new players
             if espPlayerAddedConnection then espPlayerAddedConnection:Disconnect() end
             espPlayerAddedConnection = Players.PlayerAdded:Connect(function(player)
                 player.CharacterAdded:Connect(function()
@@ -548,7 +826,7 @@ TabFunctions:AddToggle({
                 end)
             end)
             
-            -- Ensure ESP stays active after local player respawns
+            -- Handles local player respawn
             if espLocalPlayerRespawnConnection then espLocalPlayerRespawnConnection:Disconnect() end
             espLocalPlayerRespawnConnection = LocalPlayer.CharacterAdded:Connect(function()
                 task.wait(1)
@@ -565,14 +843,14 @@ TabFunctions:AddToggle({
     end
 })
 
--- Enhanced GodMode with better protection
+-- Advanced GodMode System
 local godModeEnabled = false
 local godModeConnection
 local godModeHealthConnection
 
 TabFunctions:AddToggle({
     Title = "GodMode",
-    Description = "Advanced god mode with multiple protection layers",
+    Description = "Advanced GodMode with multiple protection layers",
     Default = false,
     Callback = function(state)
         godModeEnabled = state
@@ -583,10 +861,9 @@ TabFunctions:AddToggle({
                 updateReferences()
                 if not humanoid then return end
                 
-                -- Store original max health
                 local originalMaxHealth = humanoid.MaxHealth
                 
-                -- Health monitoring
+                -- Health protection
                 if godModeHealthConnection then godModeHealthConnection:Disconnect() end
                 godModeHealthConnection = humanoid:GetPropertyChangedSignal("Health"):Connect(function()
                     if godModeEnabled and humanoid.Health < originalMaxHealth then
@@ -594,14 +871,14 @@ TabFunctions:AddToggle({
                     end
                 end)
                 
-                -- Prevent death state
+                -- Prevents platform state
                 local stateConnection = humanoid:GetPropertyChangedSignal("PlatformStand"):Connect(function()
                     if godModeEnabled then
                         humanoid.PlatformStand = false
                     end
                 end)
                 
-                -- Monitor for death and restore
+                -- Prevents death
                 local deathConnection = humanoid.Died:Connect(function()
                     if godModeEnabled then
                         task.wait(0.1)
@@ -612,7 +889,6 @@ TabFunctions:AddToggle({
                     end
                 end)
                 
-                -- Store connections for cleanup
                 if not espConnections.godMode then
                     espConnections.godMode = {}
                 end
@@ -621,26 +897,25 @@ TabFunctions:AddToggle({
                 espConnections.godMode.death = deathConnection
             end
             
-            -- Main godmode loop
+            -- Main GodMode loop
             godModeConnection = RunService.Heartbeat:Connect(function()
                 updateReferences()
                 if not character or not humanoid then return end
                 
-                -- Force health to max
+                -- Keeps health full
                 if humanoid.Health < humanoid.MaxHealth then
                     humanoid.Health = humanoid.MaxHealth
                 end
                 
-                -- Prevent death state
+                -- Prevents death state
                 if humanoid:GetState() == Enum.HumanoidStateType.Dead then
                     humanoid:ChangeState(Enum.HumanoidStateType.Running)
                     humanoid.Health = humanoid.MaxHealth
                 end
                 
-                -- Remove damage effects
+                -- Removes visual effects
                 for _, part in ipairs(character:GetChildren()) do
                     if part:IsA("BasePart") then
-                        -- Remove fire, smoke, or other damage effects
                         for _, effect in ipairs(part:GetChildren()) do
                             if effect:IsA("Fire") or effect:IsA("Smoke") or effect:IsA("Sparkles") then
                                 effect:Destroy()
@@ -650,10 +925,9 @@ TabFunctions:AddToggle({
                 end
             end)
             
-            -- Setup for current character
             setupGodMode()
             
-            -- Re-setup on character respawn
+            -- Reapplies after respawn
             LocalPlayer.CharacterAdded:Connect(function()
                 task.wait(0.5)
                 if godModeEnabled then
@@ -681,8 +955,9 @@ TabFunctions:AddToggle({
     end
 })
 
--- Cleanup on script end
+-- Cleanup when game closes
 game:BindToClose(function()
+    -- Cleans ESP elements
     for player, folder in pairs(espFolders) do
         if folder then folder:Destroy() end
     end
@@ -690,5 +965,20 @@ game:BindToClose(function()
         for _, conn in pairs(conns) do
             pcall(function() conn:Disconnect() end)
         end
+    end
+    
+    -- Disconnects Brainrot detection
+    if brainrotConnection then
+        brainrotConnection:Disconnect()
+    end
+
+    -- Removes sky teleport interface
+    if skyTeleportFrame then
+        skyTeleportFrame:Destroy()
+    end
+    
+    -- Disconnects RGB effect
+    if skyButtonRGBConnection then
+        skyButtonRGBConnection:Disconnect()
     end
 end)
