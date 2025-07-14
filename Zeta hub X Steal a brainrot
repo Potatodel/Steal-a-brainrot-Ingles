@@ -1,6 +1,6 @@
--- Restriction: Only works in the game "Steal a Brainrot"
-if game.PlaceId ~= 109983668079237 then
-    game:GetService("Players").LocalPlayer:Kick("Please join the game Steal a Brainrot")
+-- Restriction: Only works in the games "Steal a Brainrot" or the specified additional game
+if game.PlaceId ~= 109983668079237 and game.PlaceId ~= 96342491571673 then
+    game:GetService("Players").LocalPlayer:Kick("Please join either Steal a Brainrot and join my discord server <3")
     return
 end
 
