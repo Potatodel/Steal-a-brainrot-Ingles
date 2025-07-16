@@ -168,7 +168,7 @@ TabDiscord:AddDiscordInvite({
     Name = "Zeta Hub",
     Description = "Join our community",
     Logo = "rbxassetid://88800066762467",
-    Invite = "https://discord.gg/pzrtAEDBbt"
+    Invite = "https://discord.gg/bTZtdUjxdB"
 })
 
 -- Security Tab
